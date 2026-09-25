@@ -1,0 +1,11 @@
+{
+  "version": "0.2.0",
+  "notes": "首个对外版本，核心功能全部就绪：\n\n· 随记 —— 随手记一句灵感，支持标签分类、关联目标、关键词检索\n· 目标与待办 —— 建目标、拆任务、跟进展，每个动作都在时间线留痕\n· 时间线 —— 所有操作按天折叠，重要的日子可标记为里程碑\n· 番茄钟 —— 胶囊/圆环/面板三档浮窗，专注结束后记录做了什么\n· 悬浮球 —— 贴边吸附、悬停展开，一键唤起随记或番茄钟\n· 周期报告 —— 周报 / 月报 / 年报，同一条时间轴的缩放视图\n· 记录热力图 —— 近半年记录密度一目了然\n\n浅色 / 深色主题，系统托盘常驻，全局快捷键，数据库路径可自定义。\n一切数据存在本机，完全离线，不联网、不上传。",
+  "pub_date": "2026-09-25T00:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "url": "https://github.com/read-April/LifeTrack/releases/download/v0.2.0/LifeTrack_0.2.0_x64_en-US.msi",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRcmZ1c2tiUUFQeHQzQXkwcm1xUjdleXdoRnljb25FcWhxbnA0SExPUjVrRlZRMWJ6N3YxN2pISGt1SHluS012UFh6SlkxN05LdlE1WHkycjJ0bTJ0RUg5LzdvMllSd1FBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzQyNzQ4CWZpbGU6TGlmZVRyYWNrXzAuMi4wX3g2NF9lbi1VUy5tc2kJdmVyc2lvbjowLjIuMApacnZCZ0JWeStNd0pGakpzTWM1RzFWbU5PTG9ROXA1NkFGWE83S0w1eEVzT1ZUZzUwbTJMTzJmeUNtQ0FhUlN5M0cvZW55cE84c2VyZTNtTTdFM1JEUT09Cg=="
+    }
+  }
+}
