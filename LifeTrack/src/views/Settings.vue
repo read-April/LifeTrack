@@ -118,6 +118,7 @@ const upInfo = ref({ current: "", latest: "", notes: "" });
 const upPhase = ref<"idle" | "download" | "install">("idle");  // Windows 下装完 MSI 会自动重启，无需手动 relaunch
 const upPct = ref(0);               // 下载百分比（-1 = 服务端未报总长）
 const upDoneBytes = ref(0);
+const upErr = ref("");              // 弹窗内失败原因（updateMsg 在弹窗外，出错时必须弹窗内可见）
 
 // 只声明用到的字段，避开动态 import 的类型解析噪声
 type UpdateHandle = {
@@ -143,6 +144,7 @@ async function checkUpdate() {
       upPhase.value = "idle";
       upPct.value = 0;
       upDoneBytes.value = 0;
+      upErr.value = "";
       upOpen.value = true;
     } else {
       updateStatus.value = "latest";
@@ -166,6 +168,7 @@ async function openReleasePage() {
 // 下载并安装：passive 模式下 MSI 静默替换，Windows 下装完会自动退出并重启应用
 async function doUpdate() {
   if (upPhase.value !== "idle") return;
+  upErr.value = "";
   try {
     const mod = await import("@tauri-apps/plugin-updater");
     const update = (await mod.check()) as UpdateHandle | null;
@@ -182,7 +185,9 @@ async function doUpdate() {
     });
   } catch (e) {
     upPhase.value = "idle";
-    updateMsg.value = `更新失败：${String(e).slice(0, 60)}`;
+    // 安装未启动时进程不会退出：把真实原因摆进弹窗，否则用户只见"没反应"
+    upErr.value = `更新失败：${String(e).slice(0, 120)}`;
+    updateMsg.value = upErr.value;
   }
 }
 </script>
@@ -322,6 +327,7 @@ async function doUpdate() {
             <div class="ud-bar"><div class="ud-bar-fill" :class="{ pulse: upPct < 0 }" :style="{ width: (upPct >= 0 ? upPct : 60) + '%' }"></div></div>
             <div class="ud-prog-tx">{{ upPhase === 'download' ? (upPct >= 0 ? `下载中 ${upPct}%` : "下载中…") : "安装中，应用即将重启…" }}</div>
           </div>
+          <div v-if="upErr" class="ud-err">⚠ {{ upErr }}</div>
           <div class="ud-foot">
             <button class="ud-ghost" :disabled="upPhase !== 'idle'" @click="upOpen = false">稍后再说</button>
             <button class="ud-main" :disabled="upPhase !== 'idle'" @click="doUpdate">
@@ -443,6 +449,8 @@ async function doUpdate() {
 .ud-bar-fill.pulse { animation: udp 1.1s ease-in-out infinite; }
 @keyframes udp { 0% { transform: translateX(-100%); } 100% { transform: translateX(267%); } }
 .ud-prog-tx { margin-top: 6px; font-size: 11.5px; color: var(--text-3); }
+.ud-err { margin-top: 12px; padding: 8px 10px; border-radius: 8px; background: rgba(217,79,79,.08); border: 1px solid rgba(217,79,79,.25); font-size: 11.5px; line-height: 1.6; color: #c0392b; word-break: break-all; }
+[data-theme="dark"] .ud-err { color: #e07b7b; background: rgba(217,79,79,.1); border-color: rgba(217,79,79,.3); }
 .ud-foot { display: flex; gap: 10px; margin-top: 18px; }
 .ud-foot button { flex: 1; border: 1px solid transparent; border-radius: 10px; padding: 9px 14px; cursor: pointer; font-size: 12.5px; font-weight: 600; font-family: inherit; transition: background-color .15s ease, color .15s ease; }
 .ud-ghost { background: none; color: var(--text-3); }
