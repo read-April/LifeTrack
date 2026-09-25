@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "lifetrack",
+  "version": "0.2.0",
+  "identifier": "com.tauri-app.lifetrack",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1520",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "LifeTrack · 自知者明，观复知常",
+        "width": 1200,
+        "height": 800,
+        "center": true,
+        "backgroundColor": [20, 22, 26, 255]
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVDMTU1MkRGQ0VFQkQxMTYKUldRVzBldk8zMUlWN0k2OGM0dTg4ai9DK2VpWUFoZ0djTVR2QjJnNHdxZlF5d29oUndDdktTTloK",
+      "endpoints": [
+        "https://github.com/read-April/LifeTrack/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

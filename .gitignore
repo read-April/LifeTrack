@@ -1,0 +1,17 @@
+# 依赖与构建产物
+node_modules/
+dist/
+target/
+.vscode/
+
+# 更新签名私钥：绝不能入库（泄露 = 任何人都能给全体用户推恶意更新）
+*.updater.key
+
+# 发版操作卡：本地自用，不随仓库分发
+发版更新流程.md
+数据库设计.md
+
+# 个人工作笔记与外部参考：不上传（已用 git rm --cached 摘除跟踪）
+plan.md
+参考UI.html
+

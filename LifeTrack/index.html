@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      // 开机防主题白闪：样式/框架加载前，用上次主题同步贴一次底色。
+      // 主题存 trackbook.json 是异步读（首帧来不及），故把最后一次主题镜像进 localStorage，在此抢先翻牌。
+      // 与 global.css 的 :root / [data-theme="dark"] 默认底色保持一致；main.ts 读到权威主题后会再校准并回写镜像。
+      (function () {
+        try {
+          var t = localStorage.getItem("lt-theme-paint");
+          if (t !== "dark" && t !== "light") t = "dark";
+          var r = document.documentElement;
+          r.setAttribute("data-theme", t);
+          // 透明浮窗（番茄钟/球/Dock/随记/记录）不设底色，否则出现矩形背景
+          var h = location.hash;
+          if (/^#\/(focus|ball|dock|note|focus-record)/.test(h)) {
+            r.setAttribute("data-trans", "");
+          } else {
+            r.style.background = t === "dark" ? "#14161A" : "#FAFBFC";
+          }
+        } catch (e) { /* 读不到就交给 main.ts 兗底 */ }
+      })();
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LifeTrack · 自知者明，观复知常</title>
+  </head>
+
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

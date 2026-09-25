@@ -1,0 +1,218 @@
+/* ============ 设计变量（提取自 参考UI.html 原型，主题色取自 logo 渐变 #17A17D → #0A6B52） ============ */
+:root {
+  --bg: #FAFBFC; --card: #FFFFFF; --line: #F0F2F5; --line-2: #E8EBF0;
+  --text-1: #1A1D21; --text-2: #6B7280; --text-3: #A1A7B3;
+  --accent: #17A17D; --accent-dark: #0A6B52; --accent-soft: #E4F3EE;
+  --purple: #8B7BF7; --purple-soft: #F0EEFE;
+  --orange: #FF9B5C; --orange-soft: #FFF3EB;
+  --blue: #5BAEF7; --blue-soft: #EAF4FE;
+  --red: #FF6B7A; --red-soft: #FFEEF0;
+  /* 表面层（写死浅色收敛成变量，供深色主题整体覆盖）：输入/控件底、hover、轨道、标签底、滚动条、危险 */
+  --field: #FFFFFF; --hover: #F5F7FA; --hover-2: #F2F4F8;
+  --track: #F2F4F8; --chip: #F4F6F9; --scroll: #E8EBF0;
+  --danger: #D3384D; --danger-soft: #FDECEC; --danger-line: #F3B8C1;
+  --warn: #C2691C; /* 琥珀正文色（临近截止），深色下提亮 */
+  --shadow-sm: 0 1px 2px rgba(26,29,33,.02), 0 2px 8px rgba(26,29,33,.03);
+  --shadow-md: 0 4px 20px rgba(26,29,33,.05);
+  --r: 18px; --r-sm: 12px;
+}
+
+/* ============ 深色主题：仅覆盖调色变量，组件全用 var()，切换即整体换肤 ============ */
+[data-theme="dark"] {
+  --bg: #14161A; --card: #1C1F25; --line: #262A31; --line-2: #31363F;
+  --text-1: #E7E9ED; --text-2: #A2A9B4; --text-3: #6C737F;
+  --accent: #1FB58C; --accent-dark: #17A17D; --accent-soft: #12312A;
+  --purple: #A99BFF; --purple-soft: #241F3A;
+  --orange: #FFB07A; --orange-soft: #33241A;
+  --blue: #79BCF9; --blue-soft: #16283A;
+  --red: #FF8493; --red-soft: #341A1E;
+  --field: #23272E; --hover: #262B32; --hover-2: #2C323A;
+  --track: #2C313A; --chip: #2A2F37; --scroll: #3A4049;
+  --danger: #FF8493; --danger-soft: #341A1E; --danger-line: #5A2A32;
+  --warn: #E7A15C;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.24);
+  --shadow-md: 0 4px 20px rgba(0,0,0,.45);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; scrollbar-width: none; }
+*::-webkit-scrollbar { display: none; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: transparent; color: var(--text-2); font-size: 13px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased; letter-spacing: -.01em;
+}
+/* 主窗口才上不透明底色；透明浮窗（data-trans）永远保持透明 */
+html:not([data-trans]) body { background: var(--bg); }
+#app { height: 100%; }
+
+/* ============ 布局骨架 ============ */
+/* 侧栏两态共用同一套内边距/图标轴（恒定几何）：切换时只有文字透明度变化，宽度缓动不拖动图标，故不抖动 */
+.app { display: grid; grid-template-columns: 72px 1fr; height: 100vh; transition: grid-template-columns .22s ease; }
+.app.rail-open { grid-template-columns: 160px 1fr; }
+
+.rail {
+  background: var(--card); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; align-items: stretch; padding: 22px 0 20px;
+  /* 不加 overflow:hidden，否则折叠态悬停气泡（按钮伪元素）会被裁掉 */
+}
+/* 图标中心轴：15px 容器内边距 + 12px 按钮内边距 + 9px（半图标宽）= 36px，两态不变 */
+.rail-logo {
+  height: 36px; margin-bottom: 28px; cursor: pointer;
+  display: flex; align-items: center; gap: 9px; padding-left: 18px;
+}
+.rail-logo img { width: 36px; height: 36px; display: block; flex: 0 0 36px; }
+.rail-nav { display: flex; flex-direction: column; gap: 4px; padding: 0 15px; }
+.rail-btn {
+  width: 100%; height: 42px; border-radius: 12px; padding: 0 12px; box-sizing: border-box;
+  display: flex; align-items: center; gap: 12px;
+  color: var(--text-3); cursor: pointer; position: relative;
+  transition: background-color .2s ease, color .2s ease;
+  background: none; border: none;
+}
+.rail-btn svg { flex: 0 0 18px; display: block; }
+/* 文字：折叠时被 flex 压至 0 宽并自身裁剪（overflow:hidden 使自动最小尺寸为 0），所以仅透明度变化 */
+.rail-txt {
+  font-size: 12.5px; font-weight: 600; letter-spacing: -.1px; color: inherit;
+  white-space: nowrap; opacity: 0; overflow: hidden; text-overflow: ellipsis;
+  transition: opacity .15s ease .05s;
+}
+.app.rail-open .rail-txt { opacity: 1; }
+.rail-btn:hover { background: var(--hover); color: var(--text-1); }
+.rail-btn.on { background: var(--accent-soft); color: var(--accent-dark); }
+.rail-btn.on::before {
+  content: ''; position: absolute; left: -15px; width: 3px; height: 18px;
+  border-radius: 0 3px 3px 0; background: var(--accent);
+}
+.rail-foot { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 0 15px; }
+.fp-wrap { position: relative; }
+.rail-avatar {
+  width: 34px; height: 34px; border: none; background: none; border-radius: 8px;
+  display: grid; place-items: center; color: var(--text-3); cursor: pointer; position: relative;
+  transition: background-color .15s ease, color .15s ease;
+}
+.rail-avatar:hover { background: var(--accent-soft); color: var(--accent-dark); }
+
+.main { display: flex; flex-direction: column; overflow: hidden; }
+
+/* ============ 状态栏（内容区顶部，原生标题栏下方，不兼任拖拽） ============ */
+.statusbar {
+  flex: 0 0 auto; height: 46px; display: flex; align-items: center; justify-content: flex-end;
+  gap: 12px; padding: 0 20px; background: var(--card); border-bottom: 1px solid var(--line);
+}
+/* 关于入口（感叹号）：悬停泛主题色 */
+.statusbar-info {
+  width: 34px; height: 34px; border: none; background: none; border-radius: 8px; cursor: pointer;
+  display: grid; place-items: center; color: var(--text-3);
+  transition: background-color .15s ease, color .15s ease;
+}
+.statusbar-info:hover { background: var(--accent-soft); color: var(--accent-dark); }
+
+.content { flex: 1; overflow-y: auto; padding: 22px 36px 36px; }
+.content::-webkit-scrollbar { width: 6px; }
+.content::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 6px; }
+
+/* ============ 通用元素 ============ */
+.hello { margin-bottom: 24px; }
+.hello h1 { font-size: 24px; font-weight: 700; color: var(--text-1); letter-spacing: -.5px; line-height: 1.25; }
+.hello p { font-size: 12.5px; color: var(--text-3); margin-top: 4px; }
+.hello p strong { color: var(--text-2); font-weight: 600; }
+
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+  box-shadow: var(--shadow-sm); padding: 22px; transition: box-shadow .25s ease;
+  display: flex; flex-direction: column;
+}
+.card:hover { box-shadow: var(--shadow-md); }
+.c-title { font-size: 13px; font-weight: 600; color: var(--text-1); letter-spacing: -.1px; }
+.c-sub { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+.c-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+
+.tag {
+  font-size: 10.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+  white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;
+}
+.tag.green { background: var(--accent-soft); color: var(--accent-dark); }
+.tag.purple { background: var(--purple-soft); color: var(--purple); }
+.tag.orange { background: var(--orange-soft); color: var(--orange); }
+.tag.blue { background: var(--blue-soft); color: var(--blue); }
+.tag.grey { background: var(--chip); color: var(--text-3); }
+.tag.red { background: var(--red-soft); color: var(--red); }
+
+/* ============ 响应式断点体系 ============
+ * 电脑 ≥ 1024px（默认样式）｜ 平板 768–1023px ｜ 手机 < 768px
+ * 覆写顺序：1300px(降列) → 1023px(平板) → 767px(手机)，新页面按此三档写媒体查询 */
+
+/* 窄桌面：4 列 → 3 列（各卡跨列由页面自行覆写，不再用 span-full） */
+@media (max-width: 1300px) {
+  .grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* 平板：两列布局，侧栏强制折叠（悬停气泡仍可用）；几何恒定所以无需逐条还原尺寸 */
+@media (max-width: 1023px) {
+  .app, .app.rail-open { grid-template-columns: 72px 1fr; }
+  .app.rail-open .rail-txt { opacity: 0; }
+  .grid { grid-template-columns: repeat(2, 1fr); }
+  .content { padding: 16px 24px 24px; }
+}
+
+/* 手机：单列，触控目标加大，面板全宽 */
+@media (max-width: 767px) {
+  .grid { grid-template-columns: 1fr; }
+  .content { padding: 14px 16px 20px; }
+  .card { padding: 18px; }
+  /* 触控：侧栏按钮/头像本身 ≥ 34px，小控件点击区在 Dashboard.vue 内用伪元素补足 */
+  .tag { padding: 7px 12px; }
+}
+
+/* ============ 开屏动画（SplashLogo.vue，跑在 App.vue 的一屏开屏覆盖层里） ============
+ * 几何定标：logo 以 64 用户单位设计、渲染 192px（×3）。坐标系为 .lt-sp-stage（192×192）：
+ *   起点 (54,138) · 中点 (96,84) · 终点 (138,48)，轨迹 d 与 logo 的 Q/T 曲线同源。
+ * 编舞：图标爆入（缩放过冲+光晕）0.55s → 轨迹 0.55s 起逐段画出（1.3s）→ 线条抵达处
+ *   节点原地依次点亮（只淡入，0.55 / 1.18 / 1.85s）→ 字标遮罩上擦 1.7s 起。
+ */
+
+/* 图标入场：缩放过冲爆入 + 呼吸光晕（在途关键帧 65% 处略过冲，不依赖 cubic-bezier 过冲曲线） */
+@keyframes lt-sp-pop-in {
+  0%   { opacity: 0; transform: scale(.35); filter: drop-shadow(0 0 0 rgba(23,161,125,0)); }
+  65%  { opacity: 1; transform: scale(1.07); }
+  100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 10px 34px rgba(23,161,125,.4)); }
+}
+
+.lt-sp-line {
+  /* dash 铺满、gap 远大于路径长：隐藏态下没有 dash 边界落在终点，消除圆头在终点提前冒出的白点 */
+  stroke-dasharray: 100 1000; stroke-dashoffset: 100;
+  animation: lt-sp-draw 1.3s cubic-bezier(.45,.05,.55,.95) .55s forwards;
+}
+/* 节点：随线条到达原地"点亮"——只淡入，不缩放、不鼓光晕（干净收场，不出现跑动或膨胀的小圆） */
+.lt-sp-node { opacity: 0; }
+.lt-sp-node.n0 { animation: lt-sp-light .35s ease-out .55s forwards; }
+.lt-sp-node.n1 { animation: lt-sp-light .35s ease-out 1.18s forwards; }
+.lt-sp-node.n2 { animation: lt-sp-light .4s ease-out 1.85s forwards; }
+
+@keyframes lt-sp-draw {
+  from { stroke-dashoffset: 100; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes lt-sp-light {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes lt-sp-brand-in {
+  /* 遮罩上擦：字标从底部向上一行行揭示，比单纯位移淡入更精致 */
+  from { clip-path: inset(100% 0 0 0); opacity: 0; }
+  to   { clip-path: inset(0 0 0 0); opacity: 1; }
+}
+/* 字标入场（全局样式，配合上方 keyframes）：遮罩上擦揭示 */
+.lt-sp-brand {
+  opacity: 0;
+  clip-path: inset(100% 0 0 0);
+  animation: lt-sp-brand-in .55s ease-out 1.7s forwards;
+}
+/* 动画偏好降级：开屏只静置完整 logo，随后立即淡出（App.vue 覆盖层定时摘除逻辑不变） */
+@media (prefers-reduced-motion: reduce) {
+  .lt-sp-stage { animation: none; }
+  .lt-sp-line { stroke-dashoffset: 0; animation: none; }
+  .lt-sp-node { opacity: 1; animation: none; }
+  .lt-sp-brand { animation-duration: .01s; animation-delay: 0s; }
+}
