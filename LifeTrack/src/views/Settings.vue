@@ -108,19 +108,42 @@ function onThemeChange(e: Event) {
 
 // ---------- 检查更新 ----------
 // 插件已在 Rust 侧注册、npm 包已装；懒加载避免首屏多打一块 bundle，非打包环境失败回落提示
+// 发现新版本时弹对话框展示版本对比与更新记录；已是最新 / 失败仍走行内提示，不打扰
 type UpdateStatus = "idle" | "checking" | "found" | "latest" | "error";
 const updateStatus = ref<UpdateStatus>("idle");
 const updateMsg = ref("");
+
+const upOpen = ref(false);          // 更新对话框开关
+const upInfo = ref({ current: "", latest: "", notes: "" });
+const upPhase = ref<"idle" | "download" | "install">("idle");  // Windows 下装完 MSI 会自动重启，无需手动 relaunch
+const upPct = ref(0);               // 下载百分比（-1 = 服务端未报总长）
+const upDoneBytes = ref(0);
+
+// 只声明用到的字段，避开动态 import 的类型解析噪声
+type UpdateHandle = {
+  version: string;
+  currentVersion: string;
+  body?: string;
+  downloadAndInstall: (cb?: (e: UpEvent) => void) => Promise<void>;
+};
+type UpEvent =
+  | { event: "Started"; data: { contentLength?: number } }
+  | { event: "Progress"; data: { chunkLength: number } }
+  | { event: "Finished" };
 
 async function checkUpdate() {
   updateStatus.value = "checking";
   updateMsg.value = "";
   try {
-    const { check } = await import("@tauri-apps/plugin-updater");
-    const update = await check();
+    const mod = await import("@tauri-apps/plugin-updater");
+    const update = (await mod.check()) as UpdateHandle | null;
     if (update) {
       updateStatus.value = "found";
-      updateMsg.value = `发现新版本 v${update.version}`;
+      upInfo.value = { current: `v${update.currentVersion}`, latest: `v${update.version}`, notes: update.body || "" };
+      upPhase.value = "idle";
+      upPct.value = 0;
+      upDoneBytes.value = 0;
+      upOpen.value = true;
     } else {
       updateStatus.value = "latest";
       updateMsg.value = "已是最新版本";
@@ -129,6 +152,37 @@ async function checkUpdate() {
     // 非 Tauri 环境、未发过 Release（404）或网络不通，把真实原因带出来便于区分
     updateStatus.value = "error";
     updateMsg.value = `检查失败：${String(e).slice(0, 60)}`;
+  }
+}
+
+// 没写 notes 时兜底跳 Release 页看完整更新记录
+async function openReleasePage() {
+  try {
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl("https://github.com/read-April/LifeTrack/releases/latest");
+  } catch { /* 浏览器预览环境或插件异常，静默 */ }
+}
+
+// 下载并安装：passive 模式下 MSI 静默替换，Windows 下装完会自动退出并重启应用
+async function doUpdate() {
+  if (upPhase.value !== "idle") return;
+  try {
+    const mod = await import("@tauri-apps/plugin-updater");
+    const update = (await mod.check()) as UpdateHandle | null;
+    if (!update) { updateMsg.value = "版本已变化，请重新检查"; return; }
+    let total = -1;
+    upPhase.value = "download";
+    await update.downloadAndInstall((e: UpEvent) => {
+      if (e.event === "Started") total = e.data.contentLength ?? -1;
+      else if (e.event === "Progress") {
+        upDoneBytes.value += e.data.chunkLength;
+        upPct.value = total > 0 ? Math.min(99, Math.floor((upDoneBytes.value / total) * 100)) : -1;
+      }
+      else if (e.event === "Finished") { upPct.value = 100; upPhase.value = "install"; }
+    });
+  } catch (e) {
+    upPhase.value = "idle";
+    updateMsg.value = `更新失败：${String(e).slice(0, 60)}`;
   }
 }
 </script>
@@ -244,6 +298,40 @@ async function checkUpdate() {
       </div>
     </section>
   </div>
+
+  <!-- 更新对话框：版本对比 + 更新记录 + 下载进度（passive 静默安装） -->
+  <Teleport to="body">
+    <Transition name="ud">
+      <div v-if="upOpen" class="ud-back" @click.self="upPhase === 'idle' && (upOpen = false)">
+        <div class="ud-card" role="dialog" aria-modal="true">
+          <div class="ud-head">
+            <span class="ud-ico">↑</span>
+            <div class="ud-title">发现新版本</div>
+          </div>
+          <div class="ud-ver">
+            <span class="ud-cur">{{ upInfo.current }}</span>
+            <span class="ud-arrow">→</span>
+            <span class="ud-new">{{ upInfo.latest }}</span>
+          </div>
+          <div class="ud-notes">
+            <div class="ud-notes-title">更新内容</div>
+            <p v-if="upInfo.notes" class="ud-notes-body">{{ upInfo.notes }}</p>
+            <p v-else class="ud-notes-empty">本次更新暂无内嵌说明，<a class="ud-link" @click="openReleasePage">查看 Release 页面 →</a></p>
+          </div>
+          <div v-if="upPhase !== 'idle'" class="ud-prog">
+            <div class="ud-bar"><div class="ud-bar-fill" :class="{ pulse: upPct < 0 }" :style="{ width: (upPct >= 0 ? upPct : 60) + '%' }"></div></div>
+            <div class="ud-prog-tx">{{ upPhase === 'download' ? (upPct >= 0 ? `下载中 ${upPct}%` : "下载中…") : "安装中，应用即将重启…" }}</div>
+          </div>
+          <div class="ud-foot">
+            <button class="ud-ghost" :disabled="upPhase !== 'idle'" @click="upOpen = false">稍后再说</button>
+            <button class="ud-main" :disabled="upPhase !== 'idle'" @click="doUpdate">
+              {{ upPhase === 'idle' ? "立即更新" : upPhase === 'download' ? "下载中…" : "安装中…" }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -332,4 +420,36 @@ async function checkUpdate() {
 .update-btn:disabled { opacity: .5; cursor: default; }
 .spin { animation: spin .8s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* 更新对话框 */
+.ud-back { position: fixed; inset: 0; z-index: 200; padding: 16px; display: grid; place-items: center; background: rgba(26,29,33,.32); backdrop-filter: blur(3px); }
+.ud-card { width: min(420px, 100%); box-sizing: border-box; background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 18px 48px rgba(26,29,33,.18); padding: 20px 20px 16px; }
+.ud-head { display: flex; align-items: center; gap: 10px; }
+.ud-ico { width: 28px; height: 28px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-dark); display: grid; place-items: center; font-size: 15px; font-weight: 700; line-height: 1; }
+.ud-title { font-size: 14px; font-weight: 700; color: var(--text-1); letter-spacing: -.2px; }
+.ud-ver { display: flex; align-items: baseline; gap: 10px; margin: 16px 0 2px; font-variant-numeric: tabular-nums; }
+.ud-cur { font-size: 13px; color: var(--text-3); }
+.ud-arrow { color: var(--text-3); font-size: 13px; }
+.ud-new { font-size: 17px; font-weight: 700; color: var(--accent-dark); }
+.ud-notes { margin-top: 12px; }
+.ud-notes-title { font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
+.ud-notes-body { margin: 0; font-size: 12px; line-height: 1.75; color: var(--text-2); white-space: pre-line; word-break: break-word; max-height: 180px; overflow: auto; }
+.ud-notes-empty { margin: 0; font-size: 12px; line-height: 1.7; color: var(--text-3); }
+.ud-link { color: var(--accent-dark); cursor: pointer; font-weight: 600; }
+.ud-link:hover { text-decoration: underline; }
+.ud-prog { margin-top: 14px; }
+.ud-bar { height: 6px; border-radius: 999px; background: var(--hover); overflow: hidden; }
+.ud-bar-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .25s ease; }
+.ud-bar-fill.pulse { animation: udp 1.1s ease-in-out infinite; }
+@keyframes udp { 0% { transform: translateX(-100%); } 100% { transform: translateX(267%); } }
+.ud-prog-tx { margin-top: 6px; font-size: 11.5px; color: var(--text-3); }
+.ud-foot { display: flex; gap: 10px; margin-top: 18px; }
+.ud-foot button { flex: 1; border: 1px solid transparent; border-radius: 10px; padding: 9px 14px; cursor: pointer; font-size: 12.5px; font-weight: 600; font-family: inherit; transition: background-color .15s ease, color .15s ease; }
+.ud-ghost { background: none; color: var(--text-3); }
+.ud-ghost:hover:not(:disabled) { color: var(--text-2); }
+.ud-main { background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(23,161,125,.28); }
+.ud-main:hover:not(:disabled) { background: var(--accent-dark); }
+.ud-foot button:disabled { opacity: .5; cursor: default; }
+.ud-enter-active, .ud-leave-active { transition: opacity .16s ease; }
+.ud-enter-from, .ud-leave-to { opacity: 0; }
 </style>
