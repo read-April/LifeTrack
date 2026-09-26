@@ -10,7 +10,7 @@ import { computed, nextTick, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   type ProjectItem, type Task, type GoalStatus, type TaskStatus, type VersionEntry, GOAL_STATUS,
-  loadProjects, updateGoal, setTaskStatus as dbSetTaskStatus, deleteTask, deleteFinishedTasks,
+  loadProjects, updateGoal, setTaskStatus as dbSetTaskStatus, updateTask, deleteTask, deleteFinishedTasks,
   addTaskToGoal, addVersion, removeVersion as dbRemoveVersion,
   statusMeta, TASK_RANK, taskStatusMeta, isTodoActive, isTodoDone, isTodoFinished,
 } from "../utils/projects";
@@ -77,19 +77,58 @@ async function addTask() {
   nt.value = { text: "", urgent: false, due: "" };
   nextTick(() => ntInput.value?.focus());
 }
-/** 状态流转 = 时间轴上的一个决策点：确认 / 完成 / 放弃 / 重新打开（撤回）各落一条事件 */
-async function setTaskStatus(t: Task, next: TaskStatus) {
+/** 状态流转 = 时间轴上的一个决策点：完成 / 放弃 / 重新打开（含旧 pending 被确认）各落一条事件；note 仅放弃用，一并写进事件摘要（tasks 表不加列） */
+async function setTaskStatus(t: Task, next: TaskStatus, note?: string) {
   const g = goal.value; if (!g) return;
   const s = g.tasks.find(x => x.id === t.id); if (!s || s.status === next) return;
   await dbSetTaskStatus(t.id, next);
   const tasks = g.tasks.map(x => (x.id === t.id ? { ...x, status: next } : x));
   await syncGoal({ tasks });
-  if (next === "confirmed") addEvent("task.confirmed", `确认待办「${s.text}」`);
-  else if (next === "done") addEvent("task.completed", `完成任务「${s.text}」`);
-  else if (next === "dropped") addEvent("task.dropped", `放弃待办「${s.text}」`);
-  else if (next === "pending") addEvent("task.reopened", `重新打开待办「${s.text}」`);
+  if (next === "done") addEvent("task.completed", `完成任务「${s.text}」`);
+  else if (next === "dropped") addEvent("task.dropped", `放弃待办「${s.text}」${note ? `：${note}` : ""}`);
+  else if (next === "confirmed") {
+    // 旧 pending 存量被确认 vs 已结束被拉回：都进进行中，但语义不同、各记各的
+    if (s.status === "pending") addEvent("task.confirmed", `确认待办「${s.text}」`);
+    else addEvent("task.reopened", `重新打开待办「${s.text}」`);
+  }
 }
-function toggleDone(t: Task) { void setTaskStatus(t, isTodoDone(t) ? "pending" : "done"); }
+function toggleDone(t: Task) { void setTaskStatus(t, isTodoDone(t) ? "confirmed" : "done"); }
+// ---------- 行内编辑：改文本 / 补勾紧急 / 补设截止（状态流转不在此处） ----------
+const editId = ref<number | null>(null);
+const ef = ref({ text: "", urgent: false, due: "" });
+const efInput = ref<HTMLInputElement | null>(null);
+function startEdit(t: Task) {
+  dropId.value = null;
+  editId.value = t.id;
+  ef.value = { text: t.text, urgent: t.urgent, due: t.due };
+  nextTick(() => efInput.value?.focus());
+}
+function cancelEdit() { editId.value = null; }
+async function saveEdit(t: Task) {
+  const g = goal.value; const text = ef.value.text.trim();
+  if (!g || !text) return;
+  const patch = { text, urgent: ef.value.urgent, due: ef.value.due };
+  await updateTask(t.id, patch);
+  await syncGoal({ tasks: g.tasks.map(x => (x.id === t.id ? { ...x, ...patch } : x)) });
+  // 编辑不落时间线：events.type 是库内 CHECK 封闭枚举，新增 task.updated 需走迁移（未经同意不动库）
+  editId.value = null;
+}
+// ---------- 行内放弃：选填一句"为何"，随事件落进时间线（放弃是经历，删除是未曾发生） ----------
+const dropId = ref<number | null>(null);
+const df = ref("");
+const dfInput = ref<HTMLInputElement | null>(null);
+function startDrop(t: Task) {
+  editId.value = null;
+  dropId.value = t.id;
+  df.value = "";
+  nextTick(() => dfInput.value?.focus());
+}
+function cancelDrop() { dropId.value = null; }
+async function confirmDrop(t: Task) {
+  const note = df.value.trim();
+  dropId.value = null;
+  await setTaskStatus(t, "dropped", note || undefined);
+}
 async function removeTask(t: Task) {
   const g = goal.value; if (!g) return;
   await deleteTask(t.id);
@@ -215,23 +254,47 @@ const dueInfo = computed(() => {
           <button class="tc-ok" :disabled="!nt.text.trim()" @click="addTask">添加</button>
         </div>
         <div class="tc-list">
-          <div v-for="t in activeTasks" :key="t.id" class="tk" :class="'st-' + t.status">
-            <span class="tk-box" title="标记完成" @click="toggleDone(t)"></span>
-            <span class="tk-text">{{ t.text }}</span>
-            <span v-if="t.status === 'confirmed'" class="tk-state doing">进行中</span>
-            <span v-if="t.urgent" class="tk-urgent">紧急</span>
-            <span v-if="t.due" class="tk-due" :class="{ late: dueLate(t.due) }">{{ dueLabel(t.due) }}</span>
-            <span class="tk-acts">
-              <button v-if="t.status === 'pending'" class="tk-act" title="确认，排上日程" @click="setTaskStatus(t, 'confirmed')">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              </button>
-              <button class="tk-act drop" title="放弃" @click="setTaskStatus(t, 'dropped')">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              </button>
-              <button class="tk-del" title="删除任务" @click="removeTask(t)">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-              </button>
-            </span>
+          <div v-for="t in activeTasks" :key="t.id" class="tk" :class="editId === t.id || dropId === t.id ? 'tk-edit' : 'st-' + t.status">
+            <!-- 行内编辑态：文本 + 紧急 + 截止，回车/保存生效，Esc 放弃 -->
+            <template v-if="editId === t.id">
+              <input ref="efInput" v-model="ef.text" class="tc-input tk-edit-input" placeholder="改点什么，回车保存…" @keydown.enter.prevent="saveEdit(t)" @keydown.esc.prevent="cancelEdit" />
+              <button class="tc-chip" :class="{ on: ef.urgent }" @click="ef.urgent = !ef.urgent">紧急</button>
+              <label class="tc-chip cal">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="16" y1="3" x2="16" y2="7"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                {{ ef.due || "截止" }}
+                <input type="date" v-model="ef.due" @click="openPicker" />
+              </label>
+              <button class="tc-ok" :disabled="!ef.text.trim()" @click="saveEdit(t)">保存</button>
+              <span class="tk-cancel" @click="cancelEdit">取消</span>
+            </template>
+            <!-- 行内放弃态：一句"为何"选填，留空也能放弃；理由随事件进时间线，行上不存 -->
+            <template v-else-if="dropId === t.id">
+              <span class="tk-box"></span>
+              <input ref="dfInput" v-model="df" class="tc-input tk-edit-input" :placeholder="`为何放弃「${t.text}」？可留空，回车确认…`" @keydown.enter.prevent="confirmDrop(t)" @keydown.esc.prevent="cancelDrop" />
+              <button class="tc-ok red" @click="confirmDrop(t)">放弃</button>
+              <span class="tk-cancel" @click="cancelDrop">取消</span>
+            </template>
+            <template v-else>
+              <span class="tk-box" title="标记完成" @click="toggleDone(t)"></span>
+              <span class="tk-text">{{ t.text }}</span>
+              <span v-if="t.status === 'confirmed'" class="tk-state doing">进行中</span>
+              <span v-if="t.urgent" class="tk-urgent">紧急</span>
+              <span v-if="t.due" class="tk-due" :class="{ late: dueLate(t.due) }">{{ dueLabel(t.due) }}</span>
+              <span class="tk-acts">
+                <button v-if="t.status === 'pending'" class="tk-act" title="确认，排上日程" @click="setTaskStatus(t, 'confirmed')">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </button>
+                <button class="tk-act" title="编辑" @click="startEdit(t)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </button>
+                <button class="tk-act drop" title="放弃" @click="startDrop(t)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <button class="tk-del" title="删除任务" @click="removeTask(t)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                </button>
+              </span>
+            </template>
           </div>
           <div v-if="!activeTasks.length" class="tc-empty">还没有待办 · 上面加一条，或去首页「新建待办」</div>
         </div>
@@ -251,7 +314,7 @@ const dueInfo = computed(() => {
               <span class="tk-text">{{ t.text }}</span>
               <span class="tk-state" :class="t.status === 'done' ? 'done' : 'drop'">{{ taskStatusMeta(t.status).label }}</span>
               <span class="tk-acts">
-                <button class="tk-act" title="恢复到待办" @click="setTaskStatus(t, 'pending')">
+                <button class="tk-act" title="恢复到进行中" @click="setTaskStatus(t, 'confirmed')">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
                 </button>
                 <button class="tk-del" title="删除任务" @click="removeTask(t)">
@@ -363,9 +426,10 @@ const dueInfo = computed(() => {
 .tk-due.late { color: var(--danger); font-weight: 600; }
 .tk-del { border: none; background: none; color: var(--text-3); cursor: pointer; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; flex: 0 0 auto; transition: background-color .15s ease, color .15s ease; }
 .tk-del:hover { background: var(--red-soft); color: var(--danger); }
-/* 悬停成组浮现的操作区（确认/放弃/恢复 + 删除），不跳位 */
+/* 悬停成组浮现的操作区（编辑/放弃/删除），不跳位；已结束那组常驻显示，删除入口一眼可见 */
 .tk-acts { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; opacity: 0; transition: opacity .12s ease; }
 .tk:hover .tk-acts { opacity: 1; }
+.tc-done .tk-acts { opacity: 1; }
 .tk-act { border: none; background: none; color: var(--text-3); cursor: pointer; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; flex: 0 0 auto; transition: background-color .15s ease, color .15s ease; }
 .tk-act:hover { background: var(--accent-soft); color: var(--accent-dark); }
 .tk-act.drop:hover { background: var(--red-soft); color: var(--danger); }
@@ -373,6 +437,13 @@ const dueInfo = computed(() => {
 .tk-state.doing { background: var(--blue-soft); color: var(--blue); }
 .tk-state.done { background: var(--accent-soft); color: var(--accent-dark); }
 .tk-state.drop { background: var(--chip); color: var(--text-3); }
+/* 行内编辑/放弃态：沿用 .tk 行壳，内容换成输入框 + 胶囊或确认 / 取消 */
+.tk-edit { gap: 8px; flex-wrap: wrap; }
+.tk-edit-input { flex: 1; min-width: 160px; }
+.tk-cancel { font-size: 11.5px; color: var(--text-3); cursor: pointer; flex: 0 0 auto; }
+.tk-cancel:hover { color: var(--text-1); }
+.tc-ok.red { background: var(--danger); }
+.tc-ok.red:hover:not(:disabled) { background: var(--danger); filter: brightness(.9); }
 .tc-empty { padding: 18px 0 4px; font-size: 12px; color: var(--text-3); text-align: center; }
 .tc-clear { align-self: flex-start; border: 1px solid var(--line); background: none; border-radius: 9px; padding: 6px 12px; font-size: 11.5px; color: var(--text-3); cursor: pointer; font-family: inherit; transition: all .15s ease; }
 .tc-clear:hover { border-color: var(--danger-line); color: var(--danger); background: var(--danger-soft); }

@@ -137,7 +137,7 @@ async function addTask() {
   if (!text) return;
   const inboxId = await ensureInbox();
   const t = await addTaskToGoal(inboxId, { text, urgent: false, due: "" });
-  tasks.value.push({ id: t.id, text: t.text, goalName: "待办", status: "pending" });
+  tasks.value.push({ id: t.id, text: t.text, goalName: "待办", status: t.status });
   addText.value = "";
 }
 

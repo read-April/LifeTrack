@@ -141,7 +141,7 @@ async function toggleTodo(t: Task) {
   const g = todoGoal.value; if (!g) return;
   const s = g.tasks.find(x => x.id === t.id);
   if (!s) return;
-  const next: TaskStatus = isTodoDone(s) ? "pending" : "done";
+  const next: TaskStatus = isTodoDone(s) ? "confirmed" : "done";
   await setTaskStatus(s.id, next);
   s.status = next;
   if (next === "done") addEvent("task.completed", `完成任务「${s.text}」`);

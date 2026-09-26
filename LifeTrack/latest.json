@@ -1,11 +1,11 @@
 {
-  "version": "0.3.0",
-  "notes": "· 支持应用内在线升级：检测到新版本后一键更新，无需手动下载安装\n· 番茄钟新增暂停：小 / 中 / 大三档均可随时暂停与继续，暂停时段不计入专注时长\n· 番茄钟入口更克制：从托盘或悬浮球打开后不再自动计时，改由你手动开始\n· 番茄钟小档胶囊更贴合内容，开始与暂停时宽窄过渡自然\n· 修复专注不足一分钟结束时，计时数字未归零的问题",
+  "version": "0.4.0",
+  "notes": "· 待办写下即开工：新建后直接进行中，不再需要逐条确认\n· 待办可以后补：点行上铅笔就地改文本、勾紧急、设截止\n· 放弃时可随手写一句为何，随事件落进时间线\n· 已结束待办的操作按钮常驻显示，恢复与删除一眼可见",
   "pub_date": "2026-09-26T00:00:00Z",
   "platforms": {
     "windows-x86_64": {
-      "url": "https://github.com/read-April/LifeTrack/releases/download/v0.3.0/LifeTrack_0.3.0_x64_en-US.msi",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRcmZ1c2tiUUFQeGt6M2t4QmtsKzh0QlVyL24xYlFMa0FTczZLZ29qSmxMY1hYQ1ZhejZxYkFZcys1OC9Ham41TDVvVi9idzBLRjhOaE1vaG1pZnZmclVDY1ZXekdWTWdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzg3NjAxCWZpbGU6TGlmZVRyYWNrXzAuMy4wX3g2NF9lbi1VUy5tc2kJdmVyc2lvbjowLjMuMApROEdZSVNFSmlJN1EyZHNXNlJOSDVja3J3N29ZZ2lSVkprbWdWUFZ2V0MxOWN4Z0ppdGZYOXBaUENQdDc1VFNEVnc5WnRaa2ljZlZSK3RUTVBMYjJEdz09Cg=="
+      "url": "https://github.com/read-April/LifeTrack/releases/download/v0.4.0/LifeTrack_0.4.0_x64_en-US.msi",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRcmZ1c2tiUUFQeGxrOGR5TWI4NHV1bE1nY0VwVUZ1Mjh4Nk82ZW9vaHFUMWdVSEhteG1BcERXSzN6ZjRwN2E3YmNZNWc3bTZHOTQ0aFZWeGhTNWlZeStLYnhTODNzYndZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwNDM2OTUxCWZpbGU6TGlmZVRyYWNrXzAuNC4wX3g2NF9lbi1VUy5tc2kJdmVyc2lvbjowLjQuMAo4Y0t0L2F4WjRySlc1Z1ZGOHRnaS9Qd0dudThPSktycFhXK0N6WXRHZkxEcEVBZDExaHFBOFg2M1ZiSXYzZTJ0UTVFQ3pDbGozV2YzOHg5RnQ3MXBBQT09Cg=="
     }
   }
 }

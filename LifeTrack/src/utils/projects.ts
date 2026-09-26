@@ -14,8 +14,8 @@ import { isoDate, parseIso } from "./logs";
 export type GoalStatus = "active" | "paused" | "done" | "dropped";
 
 /**
- * 待办状态机（决策轨迹）：pending(写下待确认) → confirmed(确认排上) → done(完成) | dropped(放弃)
- * 每次流转都在时间轴落一个点；pending 也可直接完成/放弃，确认只是中间的一个决策态
+ * 待办状态机（决策轨迹）：写下来即开工 confirmed(进行中) → done(完成) | dropped(放弃)
+ * pending(待确认) 仅历史遗留：旧库存量仍可确认/完成，新建不再产生；每次流转都在时间轴落一个点
  */
 export type TaskStatus = "pending" | "confirmed" | "done" | "dropped";
 
@@ -268,17 +268,29 @@ export async function deleteGoal(id: number): Promise<void> {
 
 // ---------- 待办任务 ----------
 
-/** 加一条待办：status 固定 pending（后续流转走 setTaskStatus），返回新任务供上屏 */
+/** 加一条待办：写下来即开工，初始直接 confirmed（后续流转走 setTaskStatus），返回新任务供上屏 */
 export async function addTaskToGoal(
   goalId: number, input: { text: string; urgent: boolean; due: string },
 ): Promise<Task> {
   const db = await getDb();
   const now = Date.now();
   const res = await db.execute(
-    "INSERT INTO tasks (goal_id, text, urgent, due, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, ?)",
+    "INSERT INTO tasks (goal_id, text, urgent, due, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'confirmed', ?, ?)",
     [goalId, input.text, input.urgent ? 1 : 0, dueMs(input.due), now, now],
   );
-  return { id: res.lastInsertId ?? now, text: input.text, urgent: input.urgent, due: input.due, status: "pending" };
+  return { id: res.lastInsertId ?? now, text: input.text, urgent: input.urgent, due: input.due, status: "confirmed" };
+}
+
+/** 编辑待办：文本/紧急/截止只写给到的字段，updated_at 一律刷新（状态流转仍归 setTaskStatus） */
+export async function updateTask(id: number, patch: { text?: string; urgent?: boolean; due?: string }): Promise<void> {
+  const db = await getDb();
+  const cols: string[] = ["updated_at = ?"];
+  const args: (string | number | null)[] = [Date.now()];
+  if (patch.text !== undefined) { cols.push("text = ?"); args.push(patch.text); }
+  if (patch.urgent !== undefined) { cols.push("urgent = ?"); args.push(patch.urgent ? 1 : 0); }
+  if (patch.due !== undefined) { cols.push("due = ?"); args.push(dueMs(patch.due)); }
+  args.push(id);
+  await db.execute(`UPDATE tasks SET ${cols.join(", ")} WHERE id = ?`, args);
 }
 
 /** 待办状态流转：done/dropped 写 completed_at，撤销回 pending/confirmed 清成 NULL，updated_at 一律刷新 */
