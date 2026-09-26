@@ -1,11 +1,11 @@
 {
-  "version": "0.2.1",
-  "notes": "· 验证应用内自动更新流程\n· 本版无功能变更（数据在本机不受影响）",
-  "pub_date": "2026-09-25T00:00:00Z",
+  "version": "0.3.0",
+  "notes": "· 支持应用内在线升级：检测到新版本后一键更新，无需手动下载安装\n· 番茄钟新增暂停：小 / 中 / 大三档均可随时暂停与继续，暂停时段不计入专注时长\n· 番茄钟入口更克制：从托盘或悬浮球打开后不再自动计时，改由你手动开始\n· 番茄钟小档胶囊更贴合内容，开始与暂停时宽窄过渡自然\n· 修复专注不足一分钟结束时，计时数字未归零的问题",
+  "pub_date": "2026-09-26T00:00:00Z",
   "platforms": {
     "windows-x86_64": {
-      "url": "https://github.com/read-April/LifeTrack/releases/download/v0.2.1/LifeTrack_0.2.1_x64_en-US.msi",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRcmZ1c2tiUUFQeHVMT0dDT0dLenhnOG5yQXAxZTFvTWNMWnZBTHIzRE01K0lwcFE5UmJsR0ZrKzFDazZyY1laTFNVaGFSejNvcVpHNGtvSUgzb3NnV1JjN0RQcmNmTndvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzQ5NzEwCWZpbGU6TGlmZVRyYWNrXzAuMi4xX3g2NF9lbi1VUy5tc2kJdmVyc2lvbjowLjIuMQpSbUNlQ2JVYTJ2SXdOYmxjY3VMM2RhMm5OQmI2Z2UzRG5sQVg2d0tkMk9rdFZQcGZQcFlQY3k5OGVUL3RtbDdjTjRHekpncEJhcjlhWjhaVDMzY3lCZz09Cg=="
+      "url": "https://github.com/read-April/LifeTrack/releases/download/v0.3.0/LifeTrack_0.3.0_x64_en-US.msi",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRcmZ1c2tiUUFQeGt6M2t4QmtsKzh0QlVyL24xYlFMa0FTczZLZ29qSmxMY1hYQ1ZhejZxYkFZcys1OC9Ham41TDVvVi9idzBLRjhOaE1vaG1pZnZmclVDY1ZXekdWTWdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzg3NjAxCWZpbGU6TGlmZVRyYWNrXzAuMy4wX3g2NF9lbi1VUy5tc2kJdmVyc2lvbjowLjMuMApROEdZSVNFSmlJN1EyZHNXNlJOSDVja3J3N29ZZ2lSVkprbWdWUFZ2V0MxOWN4Z0ppdGZYOXBaUENQdDc1VFNEVnc5WnRaa2ljZlZSK3RUTVBMYjJEdz09Cg=="
     }
   }
 }

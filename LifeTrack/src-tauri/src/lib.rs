@@ -263,10 +263,7 @@ mod desk {
 
     /// 专注会话是否进行中（与托盘菜单文本同步，见 set_focus_running）
     static FOCUS_RUNNING: AtomicBool = AtomicBool::new(false);
-    /// 托盘/悬浮球请求「开始或结束」但专注窗尚不存在：建窗时机不可靠（监听未注册），
-    /// 改为落一个请求位，由专注窗挂载后经 focus_request 消费
-    static FOCUS_PENDING: AtomicBool = AtomicBool::new(false);
-    /// 托盘「开始/结束专注」菜单项，建托盘时存入，供 set_text 改文本
+    /// 托盘「番茄钟」菜单项，建托盘时存入，供 set_text 改文本（运行态指示：番茄钟 ↔ 结束）
     static FOCUS_MENU_ITEM: OnceLock<MenuItem<tauri::Wry>> = OnceLock::new();
 
     pub fn show_main(app: &AppHandle) {
@@ -321,21 +318,6 @@ mod desk {
         if let Err(e) = built {
             eprintln!("创建浮窗失败 {label}: {e}");
         }
-    }
-
-    /// 托盘/悬浮球的「专注」入口：窗口已开 → 发切换事件；首次 → 落请求位 + 建窗
-    pub fn toggle_focus(app: &AppHandle) {
-        if app.get_webview_window(FOCUS_LABEL).is_some() {
-            show_popup_focus(app);
-        } else {
-            FOCUS_PENDING.store(true, Ordering::SeqCst);
-            popup(app, FOCUS_LABEL, "index.html#/focus", FOCUS_W, FOCUS_H, true);
-        }
-    }
-
-    fn show_popup_focus(app: &AppHandle) {
-        popup(app, FOCUS_LABEL, "index.html#/focus", FOCUS_W, FOCUS_H, true);
-        let _ = app.emit_to(FOCUS_LABEL, "tray:focus-toggle", ());
     }
 
     /// 建悬浮球窗（启动时一次性创建，常驻置顶）：透明无边框、不进任务栏、
@@ -496,7 +478,7 @@ mod desk {
             .on_menu_event(|app, event| match event.id.as_ref() {
                 "show" => show_main(app),
                 "quick_note" => popup(app, NOTE_LABEL, "index.html#/quick-note", NOTE_W, NOTE_H, false),
-                "focus_toggle" => toggle_focus(app),
+                "focus_toggle" => popup(app, FOCUS_LABEL, "index.html#/focus", FOCUS_W, FOCUS_H, true),
                 "settings" => {
                     show_main(app);
                     let _ = app.emit_to("main", "tray:navigate", "settings");
@@ -518,12 +500,6 @@ mod desk {
         if let Some(item) = FOCUS_MENU_ITEM.get() {
             let _ = item.set_text(if running { "结束" } else { "番茄钟" });
         }
-    }
-
-    /// 专注窗挂载时取走待处理请求：Some(running) = 请求时正处在会话中，None = 无请求
-    #[tauri::command]
-    pub fn focus_request() -> Option<bool> {
-        FOCUS_PENDING.swap(false, Ordering::SeqCst).then(|| FOCUS_RUNNING.load(Ordering::SeqCst))
     }
 
     /// 系统通知（Rust 侧发，免给浮窗开 notification 权限）
@@ -616,7 +592,6 @@ pub fn run() {
         restart_app,
         quit_app,
         desk::set_focus_running,
-        desk::focus_request,
         desk::notify_done,
         desk::open_note,
         desk::open_focus,

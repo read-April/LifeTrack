@@ -18,7 +18,7 @@ import { readUi, writeUi } from "../utils/prefs";
 // ===== 逻辑像素尺寸：球 56 + 透明阴影留白 10×2 = 76 见方（运行期恒定，不再改窗宽） =====
 const WIN = 76;      // 球窗边长（须与 Rust BALL_WIN 一致）
 const BALL = 56;     // 球可见直径
-const PILL_W = 132;  // dock 胶囊可见尺寸（= BallDock.vue 里的 .pill）
+const PILL_W = 110;  // dock 胶囊可见尺寸（= BallDock.vue 里的 .pill）
 const PILL_H = 56;
 const DOCK_PAD = 16; // 胶囊四周的透明留白（给圆角/阴影留气口，避免胶囊贴窗边显成矩形）
 const DOCK_W = PILL_W + DOCK_PAD * 2;  // dock 窗宽（须与 Rust DOCK_W 一致）
@@ -31,6 +31,10 @@ const freeX = ref(0);        // 自由态下球心的逻辑 X（贴边态用不�
 const cy = ref(0);           // 球心的逻辑 Y
 const dockOpen = ref(false); // dock 当前是否已弹出（本地镜像，避免重复 show）
 const EDGE_SNAP = 48;        // 距左/右边缘小于此阈值才自动吸边，否则就地自由悬浮
+
+/** 贴边半隐：把整扇窗朝屏幕外挪 DOCK_HIDE px，探出边界的球体由显示器物理边缘切掉（左右同一机制），
+ *  不再依赖 .ball-root 的 overflow 裁切（左侧实测渲染不稳）。 */
+const DOCK_HIDE = 30;   // 贴边时窗口探出屏幕外的量：先吃 10px 透明留白，故球藏约 (DOCK_HIDE-10)px、露约 (66-DOCK_HIDE)px；调大=藏更多（左右共用此值）
 
 let hoverTimer = 0;
 let closeTimer = 0;
@@ -63,7 +67,11 @@ async function applyGeom() {
       freeX.value = cx;
     }
     cy.value = Math.min(Math.max(cy.value, top + BALL / 2), bottom - BALL / 2);
-    await win.setPosition(new LogicalPosition(cx - WIN / 2, cy.value - WIN / 2));
+    // 贴边：整扇窗朝屏幕外挪 DOCK_HIDE，探出部分由显示器物理裁切（右侧生效；左侧受 Windows 边界保护会被顶回 0，故左侧不靠此机制）
+    const winX = docked.value
+      ? (side.value === "left" ? left - DOCK_HIDE : right - WIN + DOCK_HIDE)
+      : Math.min(Math.max(cx - WIN / 2, left), right - WIN);
+    await win.setPosition(new LogicalPosition(winX, cy.value - WIN / 2));
     // 几何变更即持久化，下次冷启恢复原位（已钳正）
     writeUi({ ballGeom: { docked: docked.value, side: side.value, x: freeX.value, y: cy.value }, ballSide: side.value });
   } catch { /* 非 Tauri 环境（纯浏览器调试）没有真窗可摆 */ }
@@ -74,7 +82,7 @@ async function openDock() {
   const { left, top, right, bottom } = await workArea();
   const cx = docked.value ? (side.value === "right" ? right - DOCK_PEEK : left + DOCK_PEEK) : freeX.value;
   // 先算「胶囊」左上角：贴右/处右半 → 胶囊开在球左侧（向屏幕内），反之右侧；紧贴球可见边缘 +2px 间距
-  const pillX = side.value === "right" ? cx - BALL / 2 - PILL_W - 2 : cx + BALL / 2 + 2;
+  const pillX = side.value === "right" ? cx - BALL / 2 - PILL_W - 2 : cx + BALL / 2 + 39;
   const pillY = cy.value - PILL_H / 2;
   // 窗 = 胶囊 + 2×留白，胶囊居中 → 窗左上 = 胶囊左上 − 留白；再把整窗钳进工作区
   const ox = Math.min(Math.max(pillX - DOCK_PAD, left + 4), right - DOCK_W - 4);
@@ -218,7 +226,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="ball-root" @mouseenter="onEnter" @mouseleave="onLeave">
-    <!-- 悬浮球本体：可拖动 / 点击开合 dock；dock 是独立窗，不在这里画 -->
+    <!-- 悬浮球本体：可拖动 / 点击开合 dock；dock 是独立窗，不在这里画。贴边半隐由整窗出屏的物理裁切实现（见 applyGeom） -->
     <div class="ball" @mousedown="onBallDown">
       <img src="/logo.svg" alt="LifeTrack" draggable="false" />
     </div>

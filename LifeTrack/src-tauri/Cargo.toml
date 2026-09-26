@@ -1,8 +1,8 @@
 [package]
 name = "lifetrack"
-version = "0.2.1"
-description = "A Tauri App"
-authors = ["you"]
+version = "0.3.0"
+description = "LifeTrack · 自知者明，观复知常"
+authors = ["yu"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
