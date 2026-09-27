@@ -8,6 +8,7 @@
  * 这样以后改措辞（如"放弃"→"搁置"）只动 label、不动 key，不会像随记 kind 那样
  * 显示名与存储值耦合、一改就与历史记录对不上。
  */
+import { emit } from "@tauri-apps/api/event";
 import { getDb } from "./db";
 import { isoDate, parseIso } from "./logs";
 
@@ -27,6 +28,8 @@ export type Task = {
   /** 截止日 YYYY-MM-DD，可空 */
   due: string;
   status: TaskStatus;
+  /** 结束时刻（毫秒）：done/dropped 流转时写入；详情页据此折叠"本月前已结束"，新建未结束时无 */
+  completedAt?: number;
 };
 
 /** 状态元数据：label 给人看，color/light 供 chip 上色（色值沿用 global.css 软色板） */
@@ -125,7 +128,7 @@ interface GoalRow {
 }
 interface TaskRow {
   id: number; goal_id: number; text: string; urgent: number;
-  due: number | null; status: TaskStatus;
+  due: number | null; status: TaskStatus; completed_at: number | null;
 }
 interface VersionRow { id: number; goal_id: number; title: string; descr: string }
 interface TagRow { ref_id: number; tag: string }
@@ -134,6 +137,7 @@ function toTask(r: TaskRow): Task {
   return {
     id: r.id, text: r.text, urgent: r.urgent === 1,
     due: r.due != null ? isoLocal(r.due) : "", status: r.status,
+    ...(r.completed_at != null ? { completedAt: r.completed_at } : {}),
   };
 }
 
@@ -157,7 +161,7 @@ export async function loadProjects(): Promise<ProjectItem[]> {
   await ensureInbox();
   const [goalRows, taskRows, verRows, tagRows] = await Promise.all([
     db.select<GoalRow[]>("SELECT id, name, descr, status, inbox, progress, due, color, created_at, updated_at FROM goals ORDER BY updated_at DESC"),
-    db.select<TaskRow[]>("SELECT id, goal_id, text, urgent, due, status FROM tasks ORDER BY id ASC"),
+    db.select<TaskRow[]>("SELECT id, goal_id, text, urgent, due, status, completed_at FROM tasks ORDER BY id ASC"),
     db.select<VersionRow[]>("SELECT id, goal_id, title, descr FROM goal_versions ORDER BY goal_id, position DESC, id DESC"),
     db.select<TagRow[]>("SELECT ref_id, tag FROM entity_tags WHERE kind = 'goal'"),
   ]);
@@ -264,9 +268,19 @@ export async function deleteGoal(id: number): Promise<void> {
   await db.execute("DELETE FROM entity_tags WHERE kind = 'goal' AND ref_id = ?", [id]);
   await db.execute("UPDATE logs SET goal_id = NULL WHERE goal_id = ?", [id]);
   await db.execute("DELETE FROM goals WHERE id = ?", [id]);
+  // 级联删掉了该目标下的待办，同样要通知其它窗重拉列表
+  notifyTasksChanged();
 }
 
 // ---------- 待办任务 ----------
+
+/**
+ * 待办变更后广播 lt:tasks-changed：番茄钟等常驻隐藏窗（hide 不重新挂载）靠它重拉列表。
+ * 模式照抄 theme.ts 的 lt:theme 跨窗广播；全部待办写操作都经本模块，收口在此即可全覆盖。
+ */
+function notifyTasksChanged() {
+  void emit("lt:tasks-changed").catch(() => { /* 非 Tauri 环境无事件宿主 */ });
+}
 
 /** 加一条待办：写下来即开工，初始直接 confirmed（后续流转走 setTaskStatus），返回新任务供上屏 */
 export async function addTaskToGoal(
@@ -278,6 +292,7 @@ export async function addTaskToGoal(
     "INSERT INTO tasks (goal_id, text, urgent, due, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'confirmed', ?, ?)",
     [goalId, input.text, input.urgent ? 1 : 0, dueMs(input.due), now, now],
   );
+  notifyTasksChanged();
   return { id: res.lastInsertId ?? now, text: input.text, urgent: input.urgent, due: input.due, status: "confirmed" };
 }
 
@@ -291,6 +306,7 @@ export async function updateTask(id: number, patch: { text?: string; urgent?: bo
   if (patch.due !== undefined) { cols.push("due = ?"); args.push(dueMs(patch.due)); }
   args.push(id);
   await db.execute(`UPDATE tasks SET ${cols.join(", ")} WHERE id = ?`, args);
+  notifyTasksChanged();
 }
 
 /** 待办状态流转：done/dropped 写 completed_at，撤销回 pending/confirmed 清成 NULL，updated_at 一律刷新 */
@@ -304,17 +320,30 @@ export async function setTaskStatus(id: number, status: TaskStatus): Promise<voi
       : "UPDATE tasks SET status = ?, updated_at = ?, completed_at = NULL WHERE id = ?",
     done ? [status, now, now, id] : [status, now, id],
   );
+  notifyTasksChanged();
 }
 
 export async function deleteTask(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM tasks WHERE id = ?", [id]);
+  notifyTasksChanged();
 }
 
 /** 清除某目标下已结束（done/dropped）的待办 */
 export async function deleteFinishedTasks(goalId: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM tasks WHERE goal_id = ? AND status IN ('done','dropped')", [goalId]);
+  notifyTasksChanged();
+}
+
+/** 清除早于某时刻的已结束待办（详情页"更早"区的专属清账口）；老库缺 completed_at 的存量行一并归入清除 */
+export async function deleteFinishedTasksBefore(goalId: number, beforeMs: number): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "DELETE FROM tasks WHERE goal_id = ? AND status IN ('done','dropped') AND (completed_at IS NULL OR completed_at < ?)",
+    [goalId, beforeMs],
+  );
+  notifyTasksChanged();
 }
 
 // ---------- 版本记录 ----------

@@ -3,8 +3,9 @@
  * 仪表盘（首页）
  * 目标来自 utils/projects；待办统一读「待办」这个特殊目标（扁平模型）；里程碑取时间线上被标记的事件
  */
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, onBeforeUnmount, ref } from "vue";
 import { useRouter } from "vue-router";
+import { listen } from "@tauri-apps/api/event";
 import { type LogItem, fmtRich, isoToday, loadLogs, daysBetween, parseIso, streakOf } from "../utils/logs";
 import { type ProjectItem, type Task, type TaskStatus, loadProjects, ensureInbox, addTaskToGoal, setTaskStatus, TASK_RANK, isTodoActive, isTodoDone } from "../utils/projects";
 import { addEvent, milestoneTargetEvents } from "../utils/timeline";
@@ -83,10 +84,17 @@ const monthLogs = computed(() => {
 
 // ---------- 目标数据源：统一走 utils/projects（SQLite；「待办」是特殊目标 inbox，其余为展示型目标） ----------
 const projects = ref<ProjectItem[]>([]);
+let unlistenTasks: (() => void) | null = null;
 onMounted(async () => {
   await ensureInbox(); // 空库起步：先保证内置「待办」存在
   projects.value = await loadProjects();
+  // 反向同步：停在首页时若其它窗（如番茄钟）改了待办，经 lt:tasks-changed 广播重拉；
+  // onMounted 只跑一次，不靠广播则切页前一直显旧列表；非 Tauri 环境 listen 失败则静默
+  void listen("lt:tasks-changed", () => {
+    void loadProjects().then(p => { projects.value = p; });
+  }).then(fn => { unlistenTasks = fn; }).catch(() => { /* 非 Tauri 环境 */ });
 });
+onBeforeUnmount(() => unlistenTasks?.());
 // 「待办」目标不参与目标/活跃统计与目标墙展示
 const wallGoals = computed(() => projects.value.filter(g => !g.inbox));
 

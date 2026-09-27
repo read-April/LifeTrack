@@ -5,8 +5,9 @@
  * 新建/编辑走同一张表单卡片，删除复用 utils/confirm 的二次确认
  * 数据走 utils/projects.ts（SQLite，全部异步）
  */
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onBeforeUnmount, ref } from "vue";
 import { useRouter } from "vue-router";
+import { listen } from "@tauri-apps/api/event";
 import {
   type ProjectItem, type GoalStatus, GOAL_STATUS, GOAL_COLORS,
   loadProjects, createGoal, updateGoal, deleteGoal, statusMeta, parseTags, isTodoDone,
@@ -16,7 +17,15 @@ import { askDelete } from "../utils/confirm";
 import { addEvent } from "../utils/timeline";
 
 const goals = ref<ProjectItem[]>([]);
-onMounted(async () => { goals.value = await loadProjects(); });
+let unlistenTasks: (() => void) | null = null;
+onMounted(() => {
+  void loadProjects().then(p => { goals.value = p; });
+  // 目标卡片的 ✓ 完成数/总数 跟着待办变：其它窗（如番茄钟）改动后经 lt:tasks-changed 广播重拉
+  void listen("lt:tasks-changed", () => {
+    void loadProjects().then(p => { goals.value = p; });
+  }).then(fn => { unlistenTasks = fn; }).catch(() => { /* 非 Tauri 环境 */ });
+});
+onBeforeUnmount(() => unlistenTasks?.());
 const router = useRouter();
 function goDetail(g: ProjectItem) { router.push({ name: "goal-detail", params: { id: g.id } }); }
 const clampPct = (n: number) => Math.max(0, Math.min(100, Math.round(n || 0)));

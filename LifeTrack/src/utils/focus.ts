@@ -2,7 +2,7 @@
  * 专注会话数据层：SQLite focus_sessions 表 + 时间线 focus.completed 事件
  * （托盘/浮窗计时器的落库点；设计：仓库根 数据库设计.md §2）
  * 完成才写入：中途放弃（<1 分钟或窗内取消）不落库、不留悬挂事件；
- * minutes 由 end_ts - start_ts 派生（四舍五入），写入层负责与两列同步
+ * minutes 由 end_ts - start_ts 派生（向下取整），写入层负责与两列同步
  */
 import { getDb } from "./db";
 import { isoToday } from "./logs";

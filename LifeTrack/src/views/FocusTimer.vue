@@ -12,6 +12,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize, LogicalPosition } from "@tauri-apps/api/window";
 import { focusMinutesToday, activeTasks } from "../utils/focus";
 import { setTaskStatus, ensureInbox, addTaskToGoal } from "../utils/projects";
+import { addEvent } from "../utils/timeline";
 import { readUi, writeUi } from "../utils/prefs";
 
 type Level = "sm" | "md" | "lg";
@@ -41,6 +42,7 @@ const addText = ref("");
 let tick = 0;
 let msgTimer = 0;
 let unlisten: (() => void) | null = null;
+let unlistenTasks: (() => void) | null = null;
 
 function fmt(sec: number) {
   const h = Math.floor(sec / 3600);
@@ -128,8 +130,13 @@ async function finish(silentTooShort = false) {
 }
 
 async function toggleTask(id: number) {
+  const t = tasks.value.find(x => x.id === id);
   await setTaskStatus(id, "done");
-  tasks.value = tasks.value.filter(t => t.id !== id);
+  // 本窗就地移除：自己发的 lt:tasks-changed 回波不保证投递回本窗，不能只靠广播刷新（否则点勾无反馈）；
+  // 其它窗由广播通知，外窗改动时本窗监听重拉，列表终态与库一致
+  tasks.value = tasks.value.filter(x => x.id !== id);
+  // 与主窗同款留痕：时间线为脊，番茄窗里完成的待办也要落事件（摘要格式逐字对齐 Dashboard）
+  if (t) await addEvent("task.completed", `完成任务「${t.text}」`);
 }
 
 async function addTask() {
@@ -138,6 +145,7 @@ async function addTask() {
   const inboxId = await ensureInbox();
   const t = await addTaskToGoal(inboxId, { text, urgent: false, due: "" });
   tasks.value.push({ id: t.id, text: t.text, goalName: "待办", status: t.status });
+  await addEvent("task.created", `添加任务「${text}」`);
   addText.value = "";
 }
 
@@ -213,10 +221,11 @@ function closeMenu() {
   menu.value = null;
 }
 
-/** 整窗随意拖动：除交互控件与右键菜单外，任意按下都发起窗口拖拽（大档下拉/备注输入不受影响） */
+/** 整窗随意拖动：除交互控件与右键菜单外，任意按下都发起窗口拖拽（大档下拉/备注输入不受影响）；
+ *  .fx-task-box 是 span 不是 button，不列进豁免名单会被 startDragging 吞掉 click（同款坑见 FocusRecord） */
 function dragOn(e: MouseEvent) {
   if (e.button !== 0) return;
-  if ((e.target as Element).closest("button, input, select, a, .fx-menu, .fx-backdrop")) return;
+  if ((e.target as Element).closest("button, input, select, a, .fx-task-box, .fx-menu, .fx-backdrop")) return;
   getCurrentWindow().startDragging().catch(() => { /* 非 Tauri 环境无窗口可拖 */ });
 }
 
@@ -231,12 +240,18 @@ onMounted(async () => {
     ringFrac.value = 0;
     void focusMinutesToday().then(v => { todayMin.value = v; });
   });
+  // 任意窗改动待办（数据层收口广播 lt:tasks-changed）即重拉列表：
+  // 本窗 hide 不重新挂载，onMounted 只跑一次，不靠广播就会一直显示旧列表
+  unlistenTasks = await listen("lt:tasks-changed", () => {
+    void activeTasks().then(list => { tasks.value = list; });
+  });
 });
 
 onBeforeUnmount(() => {
   window.clearInterval(tick);
   window.clearTimeout(msgTimer);
   unlisten?.();
+  unlistenTasks?.();
 });
 </script>
 
@@ -314,7 +329,7 @@ onBeforeUnmount(() => {
         <div class="fx-tasks-head">还有哪些要做</div>
         <div class="fx-tasks-list">
           <div v-for="t in tasks" :key="t.id" class="fx-task">
-            <span class="fx-task-box" @click.stop="toggleTask(t.id)">
+            <span class="fx-task-box" @mousedown.stop @click.stop="toggleTask(t.id)">
               <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             </span>
             <span class="fx-task-text">{{ t.text }}</span>
@@ -360,6 +375,15 @@ html, body { background: transparent !important; }
 
 <style scoped>
 .fx { position: fixed; inset: 0; font-size: 13px; }
+
+/* 切档入场动效：窗口尺寸仍一步到位（避免透明窗连续 resize 出残影），
+   由面板从锁定角（右下角）弹入承担过渡感；轻微过冲的 easeOutBack 保持轻盈。
+   仅档位变化时 v-if 重挂/根类名切换才会触发，小档宽度伸缩、菜单开合不受波及 */
+@keyframes level-pop { from { transform: scale(.78); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.lv-sm .fx-pill, .lv-md .fx-circle, .lv-lg .fx-card {
+  transform-origin: 100% 100%;
+  animation: level-pop .2s cubic-bezier(.22, 1.15, .36, 1);
+}
 
 /* ---------- 小档胶囊 ---------- */
 .fx-pill {

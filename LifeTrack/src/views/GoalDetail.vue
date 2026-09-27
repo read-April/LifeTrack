@@ -6,11 +6,12 @@
  * 版本记录初始可从真实项目种子带出，之后用户自行添加/删除，最新在上
  * 状态在这里就地改，改完写回 utils/projects（SQLite，全部异步）
  */
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, onBeforeUnmount, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { listen } from "@tauri-apps/api/event";
 import {
   type ProjectItem, type Task, type GoalStatus, type TaskStatus, type VersionEntry, GOAL_STATUS,
-  loadProjects, updateGoal, setTaskStatus as dbSetTaskStatus, updateTask, deleteTask, deleteFinishedTasks,
+  loadProjects, updateGoal, setTaskStatus as dbSetTaskStatus, updateTask, deleteTask, deleteFinishedTasks, deleteFinishedTasksBefore,
   addTaskToGoal, addVersion, removeVersion as dbRemoveVersion,
   statusMeta, TASK_RANK, taskStatusMeta, isTodoActive, isTodoDone, isTodoFinished,
 } from "../utils/projects";
@@ -23,7 +24,16 @@ const goalId = Number(route.params.id);
 
 const projects = ref<ProjectItem[]>([]);
 const goal = computed(() => projects.value.find(g => g.id === goalId) ?? null);
-onMounted(async () => { projects.value = await loadProjects(); });
+let unlistenTasks: (() => void) | null = null;
+onMounted(async () => {
+  projects.value = await loadProjects();
+  // 停在详情页时若其它窗（如番茄钟）改了待办，经 lt:tasks-changed 广播重拉；
+  // onMounted 只跑一次，不靠广播则离开页再进来前一直显旧清单
+  void listen("lt:tasks-changed", () => {
+    void loadProjects().then(p => { projects.value = p; });
+  }).then(fn => { unlistenTasks = fn; }).catch(() => { /* 非 Tauri 环境 */ });
+});
+onBeforeUnmount(() => unlistenTasks?.());
 /** 库写完后的内存同步：只动这一个目标（updated_at 一律从库重拉，毫秒↔日期不自己凑） */
 async function syncGoal(fields: Partial<ProjectItem>) {
   const g = goal.value; if (!g) return;
@@ -68,6 +78,13 @@ const tasks = computed(() => {
 });
 const activeTasks = computed(() => tasks.value.filter(isTodoActive));
 const finishedTasks = computed(() => tasks.value.filter(isTodoFinished));
+// 已结束区只显示本月内结束的；更早的默认折叠（收起不删除，数据观仍是手动清）。
+// 老库没有 completed_at 的存量行归入"更早"，不会一进来就刷屏
+const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+const recentFinished = computed(() => finishedTasks.value.filter(t => (t.completedAt ?? 0) >= monthStart));
+const olderFinished = computed(() => finishedTasks.value.filter(t => !((t.completedAt ?? 0) >= monthStart)));
+const olderOpen = ref(false);
+const shownFinished = computed(() => olderOpen.value ? finishedTasks.value : recentFinished.value);
 async function addTask() {
   const g = goal.value; const text = nt.value.text.trim();
   if (!g || !text) return;
@@ -139,6 +156,13 @@ async function clearFinished() {
   const g = goal.value; if (!g) return;
   await deleteFinishedTasks(g.id);
   await syncGoal({ tasks: g.tasks.filter(x => !isTodoFinished(x)) });
+}
+/** 只清本月前结束的更早项："更早"区的专属清账口，近端的保留反悔余地 */
+async function clearOlderTasks() {
+  const g = goal.value; if (!g) return;
+  await deleteFinishedTasksBefore(g.id, monthStart);
+  olderOpen.value = false;
+  await syncGoal({});
 }
 function openPicker(e: MouseEvent) { (e.target as HTMLInputElement).showPicker?.(); }
 
@@ -302,11 +326,11 @@ const dueInfo = computed(() => {
         <!-- 已结束：完成或放弃，都是一条决策；手动清（不自动删） -->
         <div v-if="finishedTasks.length" class="tc-done">
           <div class="tc-done-head">
-            <span class="tc-done-title">已结束 {{ finishedTasks.length }}</span>
+            <span class="tc-done-title">已结束 {{ finishedTasks.length }}<span class="tc-done-hint"> · 本月前结束的已收起，确认无误可清除</span></span>
             <button class="tc-clear" @click="clearFinished">清除已结束</button>
           </div>
           <div class="tc-list">
-            <div v-for="t in finishedTasks" :key="t.id" class="tk" :class="'st-' + t.status">
+            <div v-for="t in shownFinished" :key="t.id" class="tk" :class="'st-' + t.status">
               <span class="tk-box" :title="t.status === 'done' ? '已完成' : '已放弃'">
                 <svg v-if="t.status === 'done'" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 <svg v-else width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
@@ -322,6 +346,12 @@ const dueInfo = computed(() => {
                 </button>
               </span>
             </div>
+          </div>
+          <div v-if="olderFinished.length" class="tc-older-row">
+            <button class="tc-older" @click="olderOpen = !olderOpen">
+              {{ olderOpen ? "收起更早的结束项" : `展开更早的 ${olderFinished.length} 项` }}
+            </button>
+            <button class="tc-older clear" @click="clearOlderTasks">清除更早项</button>
           </div>
         </div>
       </section>
@@ -450,6 +480,19 @@ const dueInfo = computed(() => {
 .tc-done { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
 .tc-done-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
 .tc-done-title { font-size: 11.5px; font-weight: 600; color: var(--text-3); }
+.tc-done-hint { font-weight: 400; font-size: 11px; color: var(--text-3); }
+.tc-older-row { display: flex; justify-content: center; gap: 4px; margin-top: 4px; }
+.tc-older {
+  border: none; background: none; padding: 3px 10px;
+  font-size: 11.5px; color: var(--text-3); font-family: inherit; cursor: pointer; border-radius: 6px;
+}
+.tc-older:hover { color: var(--text-1); background: var(--hover); }
+.tc-older.clear:hover { color: var(--danger); background: var(--danger-soft); }
+/* 已结束列表限高内滚：只作用于 .tc-done 内的这份，活跃清单不受影响；
+   滚动条样式对齐 .content 的既有惯例（全局隐条，这里局部开启细条） */
+.tc-done .tc-list { max-height: 216px; overflow-y: auto; scrollbar-width: thin; }
+.tc-done .tc-list::-webkit-scrollbar { display: block; width: 6px; }
+.tc-done .tc-list::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 6px; }
 
 /* ---------- 功能特点 ---------- */
 .feat-card { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; padding: 20px 24px; }

@@ -1,11 +1,11 @@
 {
-  "version": "0.4.0",
-  "notes": "· 优化待办写下即开工：新建后直接进行中，不再逐条确认\n· 新增待办可以后补：点行上铅笔就地改文本、勾紧急、设截止\n· 新增放弃时随手写一句为何，随事件落进时间线\n· 优化已结束待办的操作按钮常驻显示，恢复与删除一眼可见",
-  "pub_date": "2026-09-26T00:00:00Z",
+  "version": "0.5.0",
+  "notes": "· 修复番茄钟窗口的待办列表不同步：主界面删除、放弃或完成待办后，它即时跟上，无需关窗重开\n· 修复番茄钟大档里的对勾点下去没反应：勾选完成、新建待办如今都能正常操作，且与主界面一样在时间线留痕\n· 首页、目标墙与目标详情页的待办实时同步，任何地方改动都不用切页刷新\n· 待办页新增长期未清理的收纳之道：本月前结束的自动收起，可展开回看，也可一键只清更早项\n· 番茄钟小、中、大档切换新增弹入动效，从屏幕锚角生长而出",
+  "pub_date": "2026-09-27T00:00:00Z",
   "platforms": {
     "windows-x86_64": {
-      "url": "https://github.com/read-April/LifeTrack/releases/download/v0.4.0/LifeTrack_0.4.0_x64_en-US.msi",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRcmZ1c2tiUUFQeGxrOGR5TWI4NHV1bE1nY0VwVUZ1Mjh4Nk82ZW9vaHFUMWdVSEhteG1BcERXSzN6ZjRwN2E3YmNZNWc3bTZHOTQ0aFZWeGhTNWlZeStLYnhTODNzYndZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwNDM2OTUxCWZpbGU6TGlmZVRyYWNrXzAuNC4wX3g2NF9lbi1VUy5tc2kJdmVyc2lvbjowLjQuMAo4Y0t0L2F4WjRySlc1Z1ZGOHRnaS9Qd0dudThPSktycFhXK0N6WXRHZkxEcEVBZDExaHFBOFg2M1ZiSXYzZTJ0UTVFQ3pDbGozV2YzOHg5RnQ3MXBBQT09Cg=="
+      "url": "https://github.com/read-April/LifeTrack/releases/download/v0.5.0/LifeTrack_0.5.0_x64_en-US.msi",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRcmZ1c2tiUUFQeHZ3VEJlY3lZRjlubWNFS3hrKzdibU11VzlGYm52WXI0NHFudnBUWWRZak9jTXkvMDFzU1RMWlZpOVBRdkIrWmlwRVVWRlNwZTJ6dVRLblcvdTN6NUE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwNTIyNDg5CWZpbGU6TGlmZVRyYWNrXzAuNS4wX3g2NF9lbi1VUy5tc2kJdmVyc2lvbjowLjUuMApRU1pxZWZVUGFBRCsyVEUzd2tqcmlJdEFCeGxLWlNVeFN1Z0dHSlN3djdaTFd6WWE0Uy85cWpqYmFITFdLUVZLeDJpYlA3VW95TjR0TlQzc2VMOXFDdz09Cg=="
     }
   }
 }
